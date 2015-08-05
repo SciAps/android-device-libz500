@@ -76,6 +76,8 @@ $(call inherit-product-if-exists, hardware/ti/wpan/ti-wpan-products.mk)
 
 DEVICE_PACKAGE_OVERLAYS := device/sciaps/libz500/overlay
 
+TARGET_PROVIDES_INIT_RC := true
+
 # Copy files from our partitions folder to the appropriate outputs
 COPY_FILES   := $(foreach I,$(shell find $(LOCAL_PATH)/copyfiles/ -type f | sed 's/.*\/copyfiles\///'), $(LOCAL_PATH)/copyfiles/$(I):$(I))
 PRODUCT_COPY_FILES  += $(COPY_FILES)
