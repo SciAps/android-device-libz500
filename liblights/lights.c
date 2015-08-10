@@ -88,7 +88,7 @@ set_light_backlight(struct light_device_t *dev,
 	int err = 0;
 	int brightness = rgb_to_brightness(state);
 
-	brightness = (brightness*100)/255.0;
+	//brightness = (brightness*100)/255.0;
 	pthread_mutex_lock(&g_lock);
 	err = write_int(LCD_FILE, brightness);
 	if (err != 0)
