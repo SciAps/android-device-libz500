@@ -11,9 +11,10 @@ namespace gps {
 		friend class ParserThread;
 		
 		private:
+		int mState;
 		int mFD;
 		void* mScanner;
-		Thread* mRecieveThread;
+		sp<Thread> mRecieveThread;
 		
 		void init_scanner();
 		void destroy_scanner();

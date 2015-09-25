@@ -7,33 +7,45 @@
 
 #include "gps_parser.h"
 
-extern "C" {
-	extern int nmea_lex(void*);
-}
+#include "log.h"
+
+int nmea_lex(void*);
+
 
 namespace gps {
 
+#define IDLE 0
+#define RUNNING 1
+#define SHUTTING_DOWN 2
+
 class ParserThread : public Thread {
-	private:
 	GpsParser* mParser;
 	
 	public:
-	
 	ParserThread(GpsParser* parser)
-	: mParser(parser) { }
+	: Thread(false), mParser(parser) { }
 	
-	~ParserThread() { }
+	virtual ~ParserThread() { }
 	
-	protected:
-	bool threadLoop() {
+	private:
+	virtual bool threadLoop() {
+		ALOGI("starting gps parser thread...");
 		
+		mParser->mState = RUNNING;
 		mParser->init_scanner();
 		
+		int value;
 		while(!exitPending()) {
-			nmea_lex(mParser->mScanner);
+			value = nmea_lex(mParser->mScanner);
+			ALOGI("nmea_lex returned: %d", value);
+			if(value == 0) {
+				break;
+			}
 		}
 		
 		mParser->destroy_scanner();
+		
+		ALOGI("exiting gps parser thread");
 		
 		return false;
 	}
@@ -41,9 +53,7 @@ class ParserThread : public Thread {
 };
 	
 GpsParser::GpsParser()
-: mFD(-1), mRecieveThread(NULL) {
-	
-}
+: mState(IDLE), mFD(-1) { }
 
 GpsParser::~GpsParser() {
 	if(mFD >= 0) {
@@ -56,7 +66,16 @@ void GpsParser::setFD(int fd) {
 }
 
 int GpsParser::readBytes(char* buf, const unsigned int maxBytes) {
-	return read(mFD, buf, maxBytes);
+	TRACE("maxBytes: %d", maxBytes);
+	if(mState == SHUTTING_DOWN) {
+		return 0;
+	}
+	int bytesRead = read(mFD, buf, maxBytes);
+	ALOGI("%d bytes read", bytesRead);
+	if(bytesRead < 0) {
+		return 0;
+	}
+	return bytesRead;
 }
 
 void GpsParser::start() {
@@ -65,7 +84,12 @@ void GpsParser::start() {
 }
 
 void GpsParser::stop() {
-	mRecieveThread->requestExitAndWait();
+	mState = SHUTTING_DOWN;
+	status_t result = mRecieveThread->requestExitAndWait();
+	if (result) {
+		ALOGW("could not stop parser thread. Error: %d", result);
+	} 
+	ALOGI("parser stopped");
 }
 	
 	

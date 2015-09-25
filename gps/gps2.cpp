@@ -97,6 +97,8 @@ namespace gps {
 		
 		cfmakeraw(&options);
 		options.c_cflag |= (CLOCAL | CREAD | B9600 | CS8 | CSTOPB);
+		options.c_cc[VMIN] = 1;
+		options.c_cc[VTIME] = 0;
 		
 		if(tcsetattr(uart_fd, TCSANOW, &options) < 0) {
 			ALOGE("could not set terminal options");

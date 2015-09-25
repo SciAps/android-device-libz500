@@ -22,7 +22,6 @@ SENTENCE_START $
 %%
 
 
-
 . { ALOGD("debug out: %s", yytext); }
 
 %%
