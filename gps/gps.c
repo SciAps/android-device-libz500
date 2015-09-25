@@ -1502,6 +1502,9 @@ static int dev_tty_setup(GpsState* s, int baud, int init)
 	}
 
 	if (init) {
+		
+		cfmakeraw(options);
+		
 		options.c_oflag &= ~ONLCR;
 
 		options.c_iflag &= ~(ICRNL | INLCR | IXON);

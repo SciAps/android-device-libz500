@@ -25,7 +25,7 @@ include $(CLEAR_VARS)
 
 LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_SHARED_LIBRARIES := liblog libcutils libhardware libc
-LOCAL_SRC_FILES := gps.c
+LOCAL_SRC_FILES := gps2.cpp gps_parser.cpp nmea_parser.l
 LOCAL_MODULE := gps.pcm049
 #LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_TAGS := debug
