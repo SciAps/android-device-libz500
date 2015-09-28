@@ -14,18 +14,23 @@ result = yyextra->readBytes(buf, max_size);
 %option noyywrap
 %option prefix="nmea_"
 
+DATA [^\r|^\n|^\*]+
 HEXDIGIT [0-9a-fA-F]
-digit [0-9]
 CHECKSUM \*{HEXDIGIT}{2}
-N_CHECKSUM [^\*]
+NEWLINE \r?\n|\n
 START \$
+
 
 %%
 
-{START}{N_CHECKSUM}+{CHECKSUM} { ALOGD("sweet %s", yytext); }
+
+{START}{DATA}{CHECKSUM}  { ALOGD("lex CHECKSUM"); }
+{START}{DATA}{NEWLINE}   { ALOGD("lex CHECKSUM"); }
+{NEWLINE}                { ALOGD("lex NEWLINE"); }
 
 
-. { ALOGD("debug out: %s", yytext); }
+
+. { ALOGD("lex debug out: %s", yytext); }
 
 %%
 
