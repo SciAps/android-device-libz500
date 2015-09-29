@@ -5,11 +5,15 @@ namespace gps {
 
 class Slice {
 	public:
-	const char* ptr;
-	const size_t size;
+	char* ptr;
+	size_t size;
+	
+	Slice() 
+	: ptr(NULL), size(0) {}
 	
 	Slice(char* ptr, size_t size)
-	: ptr(ptr), size(size) {} 
+	: ptr(ptr), size(size) {}
+	
 };
 	
 	

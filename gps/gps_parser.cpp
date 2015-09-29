@@ -5,9 +5,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "gps_parser.h"
+#include <utils/String8.h>
 
 #include "log.h"
+
+#include "gps_parser.h"
+#include "workqueue.h"
+#include "gps.h"
 
 int nmea_lex(void*);
 
@@ -71,7 +75,6 @@ int GpsParser::readBytes(char* buf, const unsigned int maxBytes) {
 		return 0;
 	}
 	int bytesRead = read(mFD, buf, maxBytes);
-	ALOGI("%d bytes read", bytesRead);
 	if(bytesRead < 0) {
 		return 0;
 	}
@@ -92,7 +95,136 @@ void GpsParser::stop() {
 	ALOGI("parser stopped");
 }
 
+class SVWorkUnit : public WorkQueue::WorkUnit {
+  private:
+  GpsSvStatus mSvStatus;
+  
+  public:
+  SVWorkUnit(const GpsSvStatus& status)
+  : mSvStatus(status) { }
+  
+  virtual ~SVWorkUnit() {}
+  
+  virtual void run() {
+	  sAndroidCallbacks->sv_status_cb(&mSvStatus);
+  }
+  
+	
+};
+
+static Vector<Slice> split(const Slice& data) {
+  Vector<Slice> retval;
+  
+  char* ptr = data.ptr;
+  size_t size = 0;
+  
+  for(size_t i=0;i<data.size;i++) {
+	if(data.ptr[i] == ',') {
+	  retval.add(Slice(ptr, size));
+	  ptr = &data.ptr[i+1];
+	  size = 0;
+	} else {
+	  size++;
+	}
+  }
+  retval.add(Slice(ptr, size));
+  
+  return retval;
+}
+
+class NmeaSentence {
+  
+  public:
+  NmeaSentence(const Slice& data) {
+    mData = new char[data.size+1];
+	memcpy(mData, data.ptr, data.size);
+	mData[data.size] = 0;
+	
+	char* ptr = mData;
+	size_t size = 0;
+	
+	for(size_t i=0;i<data.size;i++) {
+	  if(data.ptr[i] == ',') {
+		mData[i] = 0;
+		mValues.add(Slice(ptr, size));
+		ptr = &mData[i+1];
+		size = 0;
+	  } else {
+		size++;
+	  }
+	}
+	
+	mValues.add(Slice(ptr, size));
+  }
+  
+  ~NmeaSentence() {
+	if(mData != NULL) {
+	  delete mData;
+	}
+  }
+  
+  const Slice& get(int i) {
+	return mValues[i];
+  }
+  
+  int asInt(int i) {
+	const Slice& value = get(i);
+	return atoi(value.ptr);
+  }
+  
+  double asFloat(int i) {
+	const Slice& value = get(i);
+	return strtod(value.ptr, NULL);
+  }
+  
+  const char* asStr(int i) {
+	return get(i).ptr;
+  }
+  
+  private:
+  char* mData;
+  Vector<Slice> mValues;
+	
+};
+
+static Vector<GpsSvInfo> sSv;
+
+#define MAX_NMEA_SENTENCE 80
+
 void GpsParser::emitNMEASentence(const Slice& data) {
+
+  char sentence[MAX_NMEA_SENTENCE+1];
+  memset(sentence, 0, MAX_NMEA_SENTENCE+1);
+  memcpy(sentence, data.ptr, data.size);
+  ALOGD("NMEA sentence %s", sentence);
+  
+  NmeaSentence sentance(data);
+  
+  if(strcmp("GPGSV", sentance.asStr(0)) == 0) {
+	
+	if(sentance.asInt(2) == 1) {
+		sSv.clear();
+	}
+	
+	
+	GpsSvStatus status;
+	status.size = sizeof(GpsSvStatus);
+	status.num_svs = 1;
+	status.sv_list[0].size = sizeof(GpsSvInfo);
+	status.sv_list[0].prn = 20;
+	status.sv_list[0].snr = 35.3f;
+	status.sv_list[0].elevation = 40.2f;
+	status.sv_list[0].azimuth = 53.5f;
+	
+	status.ephemeris_mask = 0;
+	status.almanac_mask = 0;
+	status.used_in_fix_mask = 0;
+	
+    sGpsWorkQueue->schedule(new SVWorkUnit(status));
+  
+  }
+
+  //sGpsWorkQueue->schedule();
 	
 }
 	

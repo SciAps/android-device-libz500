@@ -6,9 +6,11 @@
 
 #include <termios.h>
 
-#include "gps_parser.h"
-
 #include "log.h"
+
+#include "gps_parser.h"
+#include "workqueue.h"
+#include "gps.h"
 
 #include <hardware/gps.h>
 
@@ -22,6 +24,9 @@ namespace gps {
 	const char* GPS_ONOFF_FILE = "/sys/class/gpio/gpio172/value";
 	
 	static GpsParser* sGpsParser = NULL;
+	WorkQueue* sGpsWorkQueue = NULL;
+	GpsCallbacks* sAndroidCallbacks;
+	GpsSvStatus sGpsSvStatus;
 	
 	static
 	int read_int(const char* path) {
@@ -78,8 +83,23 @@ namespace gps {
 	}
 	
 	static
+	void eventThreadStart(void* arg) {
+		ALOGD("start event loop...");
+		((WorkQueue*)arg)->runLoop();
+		ALOGD("exit event loop");
+	}
+	
+	static
 	int ksp5012_gps_init(GpsCallbacks* callbacks) {
 		TRACE();
+		
+		memset(&sGpsSvStatus, 0, sizeof(GpsSvStatus));
+		sGpsSvStatus.size = sizeof(GpsSvStatus);
+		
+		sAndroidCallbacks = callbacks;
+		
+		sGpsWorkQueue = new WorkQueue();
+		sAndroidCallbacks->create_thread_cb("event thread", eventThreadStart, sGpsWorkQueue);
 		
 		sGpsParser = new GpsParser();
 		
@@ -124,6 +144,13 @@ namespace gps {
 			sGpsParser->stop();
 			delete sGpsParser;
 			sGpsParser = NULL;
+		}
+		
+		if(sGpsWorkQueue != NULL) {
+			sGpsWorkQueue->cancel();
+			sGpsWorkQueue->finish();
+			delete sGpsWorkQueue;
+			sGpsWorkQueue = NULL;
 		}
 		
 	}
