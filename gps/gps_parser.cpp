@@ -91,6 +91,10 @@ void GpsParser::stop() {
 	} 
 	ALOGI("parser stopped");
 }
+
+void GpsParser::emitNMEASentence(const Slice& data) {
+	
+}
 	
 	
 } // namespace gps

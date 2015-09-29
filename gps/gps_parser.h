@@ -3,6 +3,8 @@
 
 #include <utils/Thread.h>
 
+#include "utils.h"
+
 using namespace android;
 
 namespace gps {
@@ -23,10 +25,14 @@ namespace gps {
 		GpsParser();
 		~GpsParser();
 		
+		void emitNMEASentence(const Slice& data);
+		
 		void setFD(int fd);
 		int readBytes(char* buf, const unsigned int maxBytes);
 		void start();
 		void stop();
+		
+		static bool validChecksum(const Slice& data, const Slice& checksumStr);
 		
 	};
 	
