@@ -181,6 +181,15 @@ class NmeaSentence {
 	return get(i).ptr;
   }
   
+  bool isNull(int i) {
+	const Slice& value = get(i);
+	return value.size == 0;
+  }
+  
+  int size() {
+	return mValues.size();
+  }
+  
   private:
   char* mData;
   Vector<Slice> mValues;
@@ -193,10 +202,13 @@ static Vector<GpsSvInfo> sSv;
 
 void GpsParser::emitNMEASentence(const Slice& data) {
 
+  {
   char sentence[MAX_NMEA_SENTENCE+1];
   memset(sentence, 0, MAX_NMEA_SENTENCE+1);
   memcpy(sentence, data.ptr, data.size);
   ALOGD("NMEA sentence %s", sentence);
+  }
+  
   
   NmeaSentence sentance(data);
   
@@ -206,25 +218,33 @@ void GpsParser::emitNMEASentence(const Slice& data) {
 		sSv.clear();
 	}
 	
-	
-	GpsSvStatus status;
-	status.size = sizeof(GpsSvStatus);
-	status.num_svs = 1;
-	status.sv_list[0].size = sizeof(GpsSvInfo);
-	status.sv_list[0].prn = 20;
-	status.sv_list[0].snr = 35.3f;
-	status.sv_list[0].elevation = 40.2f;
-	status.sv_list[0].azimuth = 53.5f;
-	
-	status.ephemeris_mask = 0;
-	status.almanac_mask = 0;
-	status.used_in_fix_mask = 0;
-	
-    sGpsWorkQueue->schedule(new SVWorkUnit(status));
+	for(int i=4;i<sentance.size();i+=4) {
+	  if(!sentance.isNull(i+3)) {
+		GpsSvInfo sv;
+  		sv.size = sizeof(GpsSvInfo);
+        sv.prn = sentance.asInt(i);
+	    sv.elevation = sentance.asFloat(i+1);
+	    sv.azimuth = sentance.asFloat(i+2);
+	    sv.snr = sentance.asFloat(i+3);
+		sSv.add(sv);
+	  }
+	}
   
   }
 
-  //sGpsWorkQueue->schedule();
+  GpsSvStatus status;
+  status.size = sizeof(GpsSvStatus);
+  status.num_svs = sSv.size();
+  status.ephemeris_mask = 0;
+  status.almanac_mask = 0;
+  status.used_in_fix_mask = 0;
+  
+  for(size_t i=0;i<sSv.size();i++) {
+	status.sv_list[i] = sSv[i];
+  }
+  
+  sGpsWorkQueue->schedule(new SVWorkUnit(status));
+  
 	
 }
 	
