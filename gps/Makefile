@@ -9,6 +9,6 @@ push:
 	adb shell start
 
 format:
-	find . -type f -name "*.cpp" -exec astyle -A2 -s2 -k1 {} \;
-	find . -type f -name "*.h" -exec astyle -A2 -s2 -k1 {} \;
+	find . -type f -name "*.cpp" -exec astyle -A2 -s2 -k1 -z2 -n {} \;
+	find . -type f -name "*.h" -exec astyle -A2 -s2 -k1 -z2 -n {} \;
 
