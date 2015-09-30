@@ -4,19 +4,19 @@
 namespace gps {
 
 class Slice {
-	public:
-	char* ptr;
-	size_t size;
-	
-	Slice() 
-	: ptr(NULL), size(0) {}
-	
-	Slice(char* ptr, size_t size)
-	: ptr(ptr), size(size) {}
-	
+public:
+  char* ptr;
+  size_t size;
+
+  Slice()
+    : ptr(NULL), size(0) {}
+
+  Slice(char* ptr, size_t size)
+    : ptr(ptr), size(size) {}
+
 };
-	
-	
+
+
 } //namespace gps
 
 

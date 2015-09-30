@@ -4,10 +4,10 @@
 namespace gps {
 
 WorkQueue::WorkQueue()
-: mCanceled(false), mRunning(false) {}
+  : mCanceled(false), mRunning(false) {}
 
 WorkQueue::~WorkQueue() {
-  
+
 }
 
 status_t WorkQueue::schedule(WorkUnit* workUnit) {
@@ -23,24 +23,24 @@ status_t WorkQueue::schedule(WorkUnit* workUnit) {
 void WorkQueue::runLoop() {
   mLock.lock();
   mRunning = true;
-  
+
   while(!mCanceled) {
-	  if(!mWorkUnits.isEmpty()) {
-	    WorkUnit* workUnit = mWorkUnits.itemAt(0);
-	    mWorkUnits.removeAt(0);
-		
-		  mLock.unlock();
-		  workUnit->run();
+    if(!mWorkUnits.isEmpty()) {
+      WorkUnit* workUnit = mWorkUnits.itemAt(0);
+      mWorkUnits.removeAt(0);
+
+      mLock.unlock();
+      workUnit->run();
       delete workUnit;
-		  mLock.lock();
-	  } else {
+      mLock.lock();
+    } else {
       mWorkQueueCondition.wait(mLock);
     }
   }
-  
+
   mRunning = false;
   mWorkQueueCondition.broadcast();
-  
+
   mLock.unlock();
 }
 
@@ -52,7 +52,7 @@ status_t WorkQueue::cancel() {
 
 status_t WorkQueue::finish() {
   AutoMutex l(mLock);
-  
+
   while(mRunning) {
     mWorkQueueCondition.wait(mLock);
   }
