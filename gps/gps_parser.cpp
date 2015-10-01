@@ -5,13 +5,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <utils/String8.h>
-
 #include "log.h"
+#include <utils/String8.h>
+#include <utils/KeyedVector.h>
+
 
 #include "gps_parser.h"
 #include "workqueue.h"
 #include "gps.h"
+
+
 
 int nmea_lex(void*);
 
@@ -196,7 +199,17 @@ private:
 
 };
 
-static Vector<GpsSvInfo> sSv;
+//static Vector<GpsSvInfo> sSv;
+static KeyedVector<int, GpsSvInfo> sSv;
+
+static void updateSV(const GpsSvInfo& sv) {
+  ssize_t i = sSv.indexOfKey(sv.prn);
+  if(i < 0) {
+    i = sSv.add(sv.prn, sv);
+  }
+
+  
+}
 
 #define MAX_NMEA_SENTENCE 80
 
@@ -226,7 +239,7 @@ void GpsParser::emitNMEASentence(const Slice& data) {
         sv.elevation = sentance.asFloat(i+1);
         sv.azimuth = sentance.asFloat(i+2);
         sv.snr = sentance.asFloat(i+3);
-        sSv.add(sv);
+        updateSV(sv);
       }
     }
 
