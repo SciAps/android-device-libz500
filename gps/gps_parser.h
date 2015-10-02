@@ -2,7 +2,6 @@
 #define GPS_PARSER_H_
 
 #include <utils/Thread.h>
-#include <utils/Mutex.h>
 
 #include "utils.h"
 

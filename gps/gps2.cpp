@@ -131,7 +131,7 @@ static void toggle_power() {
   usleep(110);
   write_int(GPS_ONOFF_FILE, JF2_PULSE_LOW);
 
-  usleep(1000*1000);
+  //usleep(1000*1000);
 }
 
 static
@@ -154,6 +154,50 @@ void reportStatus() {
 }
 
 static
+int openUART() {
+  TRACE();
+  
+  int uart_fd = open(KSP5012_CHANNEL_NAME, O_RDWR | O_NOCTTY);
+  if(uart_fd < 0) {
+    ALOGE("could not open %s", KSP5012_CHANNEL_NAME);
+    goto exit_fail;
+  }
+
+  struct termios options;
+  if(tcgetattr(uart_fd, &options) < 0) {
+  	ALOGE("could not get terminal options");
+  	goto exit_fail;
+  }
+
+  cfmakeraw(&options);
+  options.c_cc[VMIN] = 0;
+  options.c_cc[VTIME] = 10;
+  
+  if(cfsetispeed(&options, B9600) < 0 || cfsetospeed(&options, B9600) < 0){
+    ALOGE("could not set speed");
+    goto exit_fail;
+  }
+
+  if(tcsetattr(uart_fd, TCSANOW, &options) < 0) {
+    ALOGE("could not set terminal options");
+    goto exit_fail;
+  }
+
+  sGpsParser = new GpsParser();
+  sGpsParser->setFD(uart_fd);
+  sGpsParser->start();
+  
+  return 0;
+  
+  exit_fail:
+  ALOGE("error opening uart");
+  if(uart_fd >= 0) {
+    close(uart_fd);
+  }
+  return -1;
+}
+
+static
 int ksp5012_gps_init(GpsCallbacks* callbacks) {
   TRACE();
   
@@ -170,32 +214,7 @@ int ksp5012_gps_init(GpsCallbacks* callbacks) {
   TimerWorkQueue = new WorkQueue();
   sAndroidCallbacks->create_thread_cb("timer thread", timerThreadStart, TimerWorkQueue);
 
-  sGpsParser = new GpsParser();
 
-  int uart_fd = open(KSP5012_CHANNEL_NAME, O_RDWR);
-  if(uart_fd < 0) {
-    ALOGE("could not open %s", KSP5012_CHANNEL_NAME);
-    goto exit_fail;
-  }
-
-  struct termios options;
-  //if(tcgetattr(uart_fd, &options) < 0) {
-  //	ALOGE("could not get terminal options");
-  //	goto exit_fail;
-  //}
-
-  cfmakeraw(&options);
-  options.c_cflag |= (CLOCAL | CREAD | B9600 | CS8 | CSTOPB);
-  options.c_cc[VMIN] = 1;
-  options.c_cc[VTIME] = 0;
-
-  if(tcsetattr(uart_fd, TCSANOW, &options) < 0) {
-    ALOGE("could not set terminal options");
-  }
-
-  sGpsParser->setFD(uart_fd);
-  sGpsParser->start();
-  
   /*
   {
   int power = read_int(GPS_SYSTEM_ON_FILE);
@@ -204,19 +223,14 @@ int ksp5012_gps_init(GpsCallbacks* callbacks) {
   }
   */
 
-  return 0;
 
-exit_fail:
-  if(uart_fd >= 0) {
-    close(uart_fd);
-  }
-  return -1;
+  return 0;
 }
 
 static
 void ksp5012_gps_cleanup() {
   TRACE();
-  
+
   if(TimerWorkQueue != NULL) {
     TimerWorkQueue->cancel();
     TimerWorkQueue->finish();
@@ -230,14 +244,12 @@ void ksp5012_gps_cleanup() {
     delete sGpsWorkQueue;
     sGpsWorkQueue = NULL;
   }
-
+  
   if(sGpsParser != NULL) {
     sGpsParser->stop();
     delete sGpsParser;
     sGpsParser = NULL;
   }
-  
-  TRACE();
 
 }
 
@@ -252,6 +264,8 @@ int ksp5012_gps_start() {
     ALOGI("turning on...");
     toggle_power();
   }
+  
+  openUART();
 
   return 0;
 }
@@ -260,17 +274,18 @@ static
 int ksp5012_gps_stop() {
   TRACE();
   
-  if(sReportTask != NULL) {
-    TimerWorkQueue->cancel(sReportTask);
-    sReportTask = NULL;
-  }
-  
   int power = read_int(GPS_SYSTEM_ON_FILE);
 
   ALOGI("gps power is: %d", power);
   if(power == 1) {
     ALOGI("turning off...");
     toggle_power();
+  }
+  
+  if(sGpsParser != NULL) {
+    sGpsParser->stop();
+    delete sGpsParser;
+    sGpsParser = NULL;
   }
   
   return 0;

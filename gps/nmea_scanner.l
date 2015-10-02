@@ -42,11 +42,11 @@ START \$
   const Slice data(&yytext[1], datalen);
   yyextra->emitNMEASentence(data);
 }
-{NEWLINE}                {  }
+{NEWLINE}                { }
 
 
 
-. {  }
+. { ALOGD("read: %s", yytext); }
 
 %%
 

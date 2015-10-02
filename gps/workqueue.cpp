@@ -81,11 +81,13 @@ void WorkQueue::cancel(WorkUnit* workUnit) {
 status_t WorkQueue::cancel() {
   AutoMutex l(mLock);
   mCanceled = true;
+  mWorkQueueCondition.broadcast();
   return OK;
 }
 
 status_t WorkQueue::finish() {
   AutoMutex l(mLock);
+  mWorkQueueCondition.broadcast();
 
   while(mRunning) {
     mWorkQueueCondition.wait(mLock);

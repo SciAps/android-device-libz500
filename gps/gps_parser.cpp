@@ -52,6 +52,7 @@ private:
 
     mParser->destroy_scanner();
 
+    mParser->mState = IDLE;
     ALOGI("exiting gps parser thread");
 
     return false;
@@ -63,6 +64,7 @@ GpsParser::GpsParser()
   : mState(IDLE), mFD(-1) { }
 
 GpsParser::~GpsParser() {
+  TRACE();
   if(mFD >= 0) {
     close(mFD);
   }
@@ -73,15 +75,17 @@ void GpsParser::setFD(int fd) {
 }
 
 int GpsParser::readBytes(char* buf, const unsigned int maxBytes) {
-  TRACE("maxBytes: %d", maxBytes);
-  if(mState == SHUTTING_DOWN) {
-    return 0;
+  for(;;) {
+    //TRACE("maxBytes: %d", maxBytes);
+    if(mState != RUNNING) {
+      TRACE("shutdown");
+      return 0;
+    }
+    int bytesRead = read(mFD, buf, maxBytes);
+    if(bytesRead > 0) {
+      return bytesRead;
+    }
   }
-  int bytesRead = read(mFD, buf, maxBytes);
-  if(bytesRead < 0) {
-    return 0;
-  }
-  return bytesRead;
 }
 
 void GpsParser::start() {
