@@ -4,6 +4,8 @@
 #define  LOG_TAG  "gps_ksp5012"
 #include <cutils/log.h>
 
+#define DEBUG_TRACE
+
 #ifdef DEBUG_TRACE
 # define TRACE(format, ...) ALOGD("[%s " __FILE__ ":%d] " format, __func__, __LINE__, ##__VA_ARGS__)
 #else

@@ -23,10 +23,62 @@ namespace gps {
 const char* GPS_SYSTEM_ON_FILE = "/sys/class/gpio/gpio177/value";
 const char* GPS_ONOFF_FILE = "/sys/class/gpio/gpio172/value";
 
+class ReportWorkUnit : public WorkQueue::WorkUnit {
+  
+  public:
+    ReportWorkUnit(long delay)
+    : WorkUnit(delay) { }
+    
+    virtual void run() {
+      ALOGD("sending SV update");
+      GpsSvStatus status = sGpsState.buildGpsSvStatus();
+      sGpsWorkQueue->schedule(new SVWorkUnit(status));
+    }
+};
+
+ReportWorkUnit* sReportTask = NULL;
+
 static GpsParser* sGpsParser = NULL;
 WorkQueue* sGpsWorkQueue = NULL;
+WorkQueue* TimerWorkQueue = NULL;
 GpsCallbacks* sAndroidCallbacks;
 GpsSvStatus sGpsSvStatus;
+GpsState sGpsState;
+GpsStatus sStatus;
+
+GpsState::SpaceVehicle::SpaceVehicle() { }
+GpsState::SpaceVehicle::SpaceVehicle(const GpsSvInfo& sv)
+ : mInfo(sv) { }
+
+void GpsState::updateSV(const GpsSvInfo& sv) {
+  AutoMutex l(mLock);
+  ssize_t i = mSpaceVehicles.indexOfKey(sv.prn);
+  if(i < 0) {
+    i = mSpaceVehicles.add(sv.prn, SpaceVehicle(sv));
+  } else {
+	  mSpaceVehicles.editValueAt(i).mInfo = sv;
+  }
+}
+
+GpsSvStatus GpsState::buildGpsSvStatus() {
+  AutoMutex l(mLock);
+  GpsSvStatus status;
+  status.size = sizeof(GpsSvStatus);
+  status.num_svs = mSpaceVehicles.size();
+  status.ephemeris_mask = 0;
+  status.almanac_mask = 0;
+  status.used_in_fix_mask = 0;
+
+  for(size_t i=0; i<mSpaceVehicles.size(); i++) {
+    status.sv_list[i] = mSpaceVehicles.valueAt(i).mInfo;
+  }
+  
+  mSpaceVehicles.clear();
+  
+  return status;
+}
+
+
 
 static
 int read_int(const char* path) {
@@ -90,8 +142,22 @@ void eventThreadStart(void* arg) {
 }
 
 static
+void timerThreadStart(void* arg) {
+  ALOGD("start timer loop...");
+  ((WorkQueue*)arg)->runLoop();
+  ALOGD("exit timer loop");
+}
+
+static
+void reportStatus() {
+  sGpsWorkQueue->schedule(new GpsStatusWorkUnit(sStatus));
+}
+
+static
 int ksp5012_gps_init(GpsCallbacks* callbacks) {
   TRACE();
+  
+  sStatus.size = sizeof(GpsStatus);
 
   memset(&sGpsSvStatus, 0, sizeof(GpsSvStatus));
   sGpsSvStatus.size = sizeof(GpsSvStatus);
@@ -99,7 +165,10 @@ int ksp5012_gps_init(GpsCallbacks* callbacks) {
   sAndroidCallbacks = callbacks;
 
   sGpsWorkQueue = new WorkQueue();
-  sAndroidCallbacks->create_thread_cb("event thread", eventThreadStart, sGpsWorkQueue);
+  sAndroidCallbacks->create_thread_cb("callback thread", eventThreadStart, sGpsWorkQueue);
+  
+  TimerWorkQueue = new WorkQueue();
+  sAndroidCallbacks->create_thread_cb("timer thread", timerThreadStart, TimerWorkQueue);
 
   sGpsParser = new GpsParser();
 
@@ -126,6 +195,14 @@ int ksp5012_gps_init(GpsCallbacks* callbacks) {
 
   sGpsParser->setFD(uart_fd);
   sGpsParser->start();
+  
+  /*
+  {
+  int power = read_int(GPS_SYSTEM_ON_FILE);
+  sStatus.status = power == 1 ? GPS_STATUS_ENGINE_ON : GPS_STATUS_ENGINE_OFF;
+  reportStatus();
+  }
+  */
 
   return 0;
 
@@ -139,19 +216,28 @@ exit_fail:
 static
 void ksp5012_gps_cleanup() {
   TRACE();
-
-  if(sGpsParser != NULL) {
-    sGpsParser->stop();
-    delete sGpsParser;
-    sGpsParser = NULL;
+  
+  if(TimerWorkQueue != NULL) {
+    TimerWorkQueue->cancel();
+    TimerWorkQueue->finish();
+    delete TimerWorkQueue;
+    TimerWorkQueue = NULL;
   }
-
+  
   if(sGpsWorkQueue != NULL) {
     sGpsWorkQueue->cancel();
     sGpsWorkQueue->finish();
     delete sGpsWorkQueue;
     sGpsWorkQueue = NULL;
   }
+
+  if(sGpsParser != NULL) {
+    sGpsParser->stop();
+    delete sGpsParser;
+    sGpsParser = NULL;
+  }
+  
+  TRACE();
 
 }
 
@@ -173,6 +259,12 @@ int ksp5012_gps_start() {
 static
 int ksp5012_gps_stop() {
   TRACE();
+  
+  if(sReportTask != NULL) {
+    TimerWorkQueue->cancel(sReportTask);
+    sReportTask = NULL;
+  }
+  
   int power = read_int(GPS_SYSTEM_ON_FILE);
 
   ALOGI("gps power is: %d", power);
@@ -180,6 +272,7 @@ int ksp5012_gps_stop() {
     ALOGI("turning off...");
     toggle_power();
   }
+  
   return 0;
 }
 
@@ -205,7 +298,15 @@ void ksp5012_gps_delete_aiding_data(GpsAidingData flags) {
 static
 int ksp5012_gps_set_position_mode(GpsPositionMode mode, GpsPositionRecurrence recurrence,
                                   uint32_t min_interval, uint32_t preferred_accuracy, uint32_t preferred_time) {
-  TRACE();
+  TRACE("GpsPositionMode: %d GpsPositionRecurrence: %d min_interval: %d preferred_accuracy: %d preferred_time: %d",
+    mode, recurrence, min_interval, preferred_accuracy, preferred_time);
+  
+  ALOGD("scheduling interval for: %d", min_interval);
+  if(sReportTask != NULL) {
+    TimerWorkQueue->cancel(sReportTask);
+  }
+  sReportTask = new ReportWorkUnit(2*min_interval);
+  TimerWorkQueue->schedule(sReportTask);
 
   return 0;
 }

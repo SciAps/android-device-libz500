@@ -1,27 +1,41 @@
 #ifndef WORKQUEUE_H_
 #define WORKQUEUE_H_
 
-#include <utils/Vector.h>
+#include <utils/Timers.h>
+#include <utils/KeyedVector.h>
 #include <utils/threads.h>
 
 using namespace android;
 
 namespace gps {
 
+#define NO_DELAY 0
+
 class WorkQueue {
 public:
   class WorkUnit {
   public:
-    WorkUnit() {}
+    WorkUnit(long delay = NO_DELAY) : mDelay(delay) {}
     virtual ~WorkUnit() {}
 
     virtual void run() = 0;
+    
+    /*
+    * millisecond delay for repeating tasks.
+    * <= 0 indicates a one-shot event;
+    */
+    long mDelay;
   };
 
   WorkQueue();
   ~WorkQueue();
 
   status_t schedule(WorkUnit* workUnit);
+  
+  /*
+  * cancels a repeating WorkUnit
+  */
+  void cancel(WorkUnit* workUnit);
 
   /*
   * Cancels all pending work and prevents additional
@@ -43,7 +57,7 @@ private:
 
   bool mCanceled;
   bool mRunning;
-  Vector<WorkUnit*> mWorkUnits;
+  KeyedVector<nsecs_t, WorkUnit*> mWorkUnits;
 
 };
 

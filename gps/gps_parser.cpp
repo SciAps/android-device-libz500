@@ -98,22 +98,7 @@ void GpsParser::stop() {
   ALOGI("parser stopped");
 }
 
-class SVWorkUnit : public WorkQueue::WorkUnit {
-private:
-  GpsSvStatus mSvStatus;
 
-public:
-  SVWorkUnit(const GpsSvStatus& status)
-    : mSvStatus(status) { }
-
-  virtual ~SVWorkUnit() {}
-
-  virtual void run() {
-    sAndroidCallbacks->sv_status_cb(&mSvStatus);
-  }
-
-
-};
 
 static Vector<Slice> split(const Slice& data) {
   Vector<Slice> retval;
@@ -199,18 +184,6 @@ private:
 
 };
 
-//static Vector<GpsSvInfo> sSv;
-static KeyedVector<int, GpsSvInfo> sSv;
-
-static void updateSV(const GpsSvInfo& sv) {
-  ssize_t i = sSv.indexOfKey(sv.prn);
-  if(i < 0) {
-    i = sSv.add(sv.prn, sv);
-  }
-
-  
-}
-
 #define MAX_NMEA_SENTENCE 80
 
 void GpsParser::emitNMEASentence(const Slice& data) {
@@ -226,11 +199,6 @@ void GpsParser::emitNMEASentence(const Slice& data) {
   NmeaSentence sentance(data);
 
   if(strcmp("GPGSV", sentance.asStr(0)) == 0) {
-
-    if(sentance.asInt(2) == 1) {
-      sSv.clear();
-    }
-
     for(int i=4; i<sentance.size(); i+=4) {
       if(!sentance.isNull(i+3)) {
         GpsSvInfo sv;
@@ -239,25 +207,11 @@ void GpsParser::emitNMEASentence(const Slice& data) {
         sv.elevation = sentance.asFloat(i+1);
         sv.azimuth = sentance.asFloat(i+2);
         sv.snr = sentance.asFloat(i+3);
-        updateSV(sv);
+        sGpsState.updateSV(sv);
       }
     }
 
   }
-
-  GpsSvStatus status;
-  status.size = sizeof(GpsSvStatus);
-  status.num_svs = sSv.size();
-  status.ephemeris_mask = 0;
-  status.almanac_mask = 0;
-  status.used_in_fix_mask = 0;
-
-  for(size_t i=0; i<sSv.size(); i++) {
-    status.sv_list[i] = sSv[i];
-  }
-
-  sGpsWorkQueue->schedule(new SVWorkUnit(status));
-
 
 }
 
