@@ -274,6 +274,11 @@ static
 int ksp5012_gps_stop() {
   TRACE();
   
+  if(sReportTask != NULL) {
+    TimerWorkQueue->cancel(sReportTask);
+    sReportTask = NULL;
+  }
+  
   int power = read_int(GPS_SYSTEM_ON_FILE);
 
   ALOGI("gps power is: %d", power);
@@ -320,7 +325,7 @@ int ksp5012_gps_set_position_mode(GpsPositionMode mode, GpsPositionRecurrence re
   if(sReportTask != NULL) {
     TimerWorkQueue->cancel(sReportTask);
   }
-  sReportTask = new ReportWorkUnit(2*min_interval);
+  sReportTask = new ReportWorkUnit(min_interval);
   TimerWorkQueue->schedule(sReportTask);
 
   return 0;
